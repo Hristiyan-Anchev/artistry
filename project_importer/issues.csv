@@ -1,12 +1,18 @@
-Title,Body,Labels,Status
+Title,Body,Labels,Status,Parent
 Bootstrap Django project,"Create Django project with apps: accounts, storefronts, catalog, orders, commissions, blog, pages, notifications.
 
 Acceptance:
 - Project runs locally with docker-compose.
 - .env support.
-- README with run instructions.","django,setup,backend,devops",Todo
-User registration & login (email/password),Enable registration/login/logout. Email verification required for creator storefront creation.,"auth,backend,frontend",Todo
-Creator storefront creation wizard,"Wizard to create storefront slug, name, avatar, banner, bio, links. Preview before publish.","storefront,frontend,backend",Todo
-Cart & checkout with Stripe,"Cart (session + authenticated), checkout, webhooks for payment success. Handle 3DS and order state updates.","checkout,payments,backend,frontend",Todo
-Commission request form builder,"Creator-defined constraints (size, medium, palette, budget, deadline); per-creator pricing rules.","commissions,backend,frontend",Todo
-Blog post CRUD with drafts & schedule,"Markdown editor, cover image, tags; scheduled publish.","blog,backend,frontend",Todo
+- README with run instructions.","django,setup,backend,devops",Todo,
+Init repository & Django scaffold,"Start project with Poetry/pip, create Django project and root app.","django,setup",Todo,Bootstrap Django project
+"Dockerize (web, db, cache)","docker-compose with web (auto-reload), Postgres, Redis; .env wired.","devops,docker",Todo,Bootstrap Django project
+Settings split + .env,"Split settings (base/dev/prod), use django-environ, DEBUG/ALLOWED_HOSTS.","django,config",Todo,Bootstrap Django project
+Pre-commit & lint,"Configure black, isort, flake8; add pre-commit hooks.","quality,linting",Todo,Bootstrap Django project
+CI pipeline,GitHub Actions: lint + pytest on PRs.,"ci,qa",Todo,Bootstrap Django project
+Core apps skeleton,"Create apps: accounts, storefronts, catalog, orders, commissions, blog, pages, notifications.","django,structure",Todo,Bootstrap Django project
+Custom User model,Swap to AbstractUser early; initial migration.,"django,accounts",Todo,Bootstrap Django project
+Admin setup,Register core models; create superuser via management command.,"django,admin",Todo,Bootstrap Django project
+URLs & base templates,"Project urls.py, per-app urls; base.html with template blocks.","django,frontend",Todo,Bootstrap Django project
+Healthcheck & logging,"/health endpoint; logging config; .gitignore, Makefile.","ops,stability",Todo,Bootstrap Django project
+README & dev script,"README with run steps; make targets: make up, make test.","docs,dx",Todo,Bootstrap Django project

@@ -1,34 +1,18 @@
 #!/usr/bin/env python3
-import csv
-import os
-import sys
-import time
-import json
-from typing import Dict, Optional, Tuple, List
+import csv, os, sys
+from typing import Dict, Tuple, List
 import requests
 from dotenv import load_dotenv
 
 GQL_ENDPOINT = "https://api.github.com/graphql"
 REST_ROOT = "https://api.github.com"
 
-def log(msg):
-    print(msg, flush=True)
-
 def die(msg, code=1):
-    log(f"ERROR: {msg}")
+    print(f"ERROR: {msg}", flush=True)
     sys.exit(code)
 
-def get_env(name: str, required: bool=True, default: Optional[str]=None) -> str:
-    v = os.getenv(name, default)
-    if required and not v:
-        die(f"Missing env var: {name}")
-    return v
-
 def gh_headers(token: str) -> Dict[str,str]:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json"
-    }
+    return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
 
 def graphql(token: str, query: str, variables: Dict=None) -> Dict:
     r = requests.post(GQL_ENDPOINT, headers=gh_headers(token), json={"query": query, "variables": variables or {}})
@@ -47,97 +31,54 @@ def rest(token: str, method: str, path: str, json_body: Dict=None):
         die(f"REST {method} {path} -> HTTP {r.status_code}: {r.text}")
     return r
 
-def find_project(token: str, owner: str, project_number: int):
-    q_user = """
+def find_project(token: str, owner: str, number: int) -> Tuple[str, Dict]:
+    q = """
     query($login:String!, $number:Int!) {
       user(login:$login) {
-        projectV2(number:$number) {
-          id
-          title
-          fields(first:100) {
-            nodes {
-              ... on ProjectV2SingleSelectField {
-                id
-                name
-                options { id name }
-              }
-              ... on ProjectV2FieldCommon {
-                id
-                name
-              }
-            }
-          }
+        projectV2(number:$number) { id title fields(first:100) {
+          nodes {
+            ... on ProjectV2SingleSelectField { id name options { id name } }
+            ... on ProjectV2FieldCommon { id name }
+          }}
         }
       }
-    }
-    """
-    data = graphql(token, q_user, {"login": owner, "number": project_number})
-    proj = data.get("user", {}).get("projectV2")
-    if proj:
-        return proj["id"], proj
-
-    q_org = """
-    query($login:String!, $number:Int!) {
       organization(login:$login) {
-        projectV2(number:$number) {
-          id
-          title
-          fields(first:100) {
-            nodes {
-              ... on ProjectV2SingleSelectField {
-                id
-                name
-                options { id name }
-              }
-              ... on ProjectV2FieldCommon {
-                id
-                name
-              }
-            }
-          }
+        projectV2(number:$number) { id title fields(first:100) {
+          nodes {
+            ... on ProjectV2SingleSelectField { id name options { id name } }
+            ... on ProjectV2FieldCommon { id name }
+          }}
         }
       }
     }
     """
-    data = graphql(token, q_org, {"login": owner, "number": project_number})
-    proj = data.get("organization", {}).get("projectV2")
-    if proj:
-        return proj["id"], proj
-    die(f"Project number {project_number} not found under owner '{owner}'.")
+    d = graphql(token, q, {"login": owner, "number": number})
+    proj = (d.get("user") or {}).get("projectV2") or (d.get("organization") or {}).get("projectV2")
+    if not proj: die(f"Project {number} not found for owner {owner}")
+    return proj["id"], proj
 
 def get_status_field_info(project):
-    field_id = None
-    options = {}
     for f in project["fields"]["nodes"]:
         if f["name"].lower() == "status" and "options" in f:
-            field_id = f["id"]
-            for opt in f["options"]:
-                options[opt["name"].strip().lower()] = opt["id"]
-            break
-    if not field_id:
-        die("Could not find 'Status' single-select field on the project. Create it first with options: Todo, In Progress, Done.")
-    return field_id, options
+            return f["id"], {o["name"].lower(): o["id"] for o in f["options"]}
+    die("Status field not found on project (create Todo/In Progress/Done).")
 
 def ensure_labels(token, owner, repo, labels):
-    if not labels:
-        return
-    import requests
+    if not labels: return
     r = rest(token, "GET", f"/repos/{owner}/{repo}/labels?per_page=100")
     existing = {l["name"].lower() for l in r.json()}
     for lb in labels:
         if lb.strip().lower() not in existing:
             rest(token, "POST", f"/repos/{owner}/{repo}/labels", {"name": lb.strip(), "color": "ededed"})
-            log(f"Created label: {lb}")
 
 def create_issue(token, repo_full, title, body, labels):
-    owner, repo = repo_full.split("/", 1)
+    owner, repo = repo_full.split("/",1)
     ensure_labels(token, owner, repo, labels)
     payload = {"title": title, "body": body}
-    if labels:
-        payload["labels"] = labels
+    if labels: payload["labels"] = labels
     r = rest(token, "POST", f"/repos/{owner}/{repo}/issues", payload)
-    js = r.json()
-    return js["number"], js["node_id"]
+    j = r.json()
+    return j["number"], j["node_id"]
 
 def add_issue_to_project(token, project_id, issue_node_id):
     m = """
@@ -151,58 +92,73 @@ def add_issue_to_project(token, project_id, issue_node_id):
     return d["addProjectV2ItemById"]["item"]["id"]
 
 def set_status(token, project_id, item_id, field_id, status_options, status_name):
-    key = (status_name or "Todo").strip().lower()
-    opt_id = status_options.get(key)
-    if not opt_id:
-        die(f"Status '{status_name}' not found in project. Available: {list(status_options.keys())}")
+    opt_id = status_options.get((status_name or "Todo").lower())
+    if not opt_id: die(f"Unknown Status '{status_name}'")
     m = """
     mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $optId:String!) {
       updateProjectV2ItemFieldValue(input:{
-        projectId:$projectId,
-        itemId:$itemId,
-        fieldId:$fieldId,
+        projectId:$projectId, itemId:$itemId, fieldId:$fieldId,
         value:{ singleSelectOptionId:$optId }
       }) { clientMutationId }
     }
     """
     graphql(token, m, {"projectId": project_id, "itemId": item_id, "fieldId": field_id, "optId": opt_id})
 
+def append_tasklist(token, repo_full, parent_number, tasks):
+    owner, repo = repo_full.split("/",1)
+    r = rest(token, "GET", f"/repos/{owner}/{repo}/issues/{parent_number}")
+    body = r.json().get("body") or ""
+    body += "\\n\\n## Subtasks\\n"
+    for num, title in tasks:
+        body += f"- [ ] #{num} — {title}\\n"
+    rest(token, "PATCH", f"/repos/{owner}/{repo}/issues/{parent_number}", {"body": body})
+
 def main():
-    from dotenv import load_dotenv
     load_dotenv()
     token = os.getenv("GITHUB_TOKEN")
-    repo_full = os.getenv("REPO")  # e.g., "username/art-storefront"
-    project_owner = os.getenv("PROJECT_OWNER")  # your user/org login
-    project_number = int(os.getenv("PROJECT_NUMBER", "0"))
+    repo_full = os.getenv("REPO")
+    project_owner = os.getenv("PROJECT_OWNER")
+    project_number = int(os.getenv("PROJECT_NUMBER","0"))
     csv_path = os.getenv("CSV_PATH")
 
     if not token or not repo_full or not project_owner or not project_number or not csv_path:
-        die("Missing one of required env vars: GITHUB_TOKEN, REPO, PROJECT_OWNER, PROJECT_NUMBER, CSV_PATH")
+        die("Missing env vars: GITHUB_TOKEN, REPO, PROJECT_OWNER, PROJECT_NUMBER, CSV_PATH")
 
     project_id, project = find_project(token, project_owner, project_number)
-    field_id, status_options = get_status_field_info(project)
-    log(f"Project found: id={project_id}. Status options: {list(status_options.keys())}")
+    field_id, status_opts = get_status_field_info(project)
 
-    created = 0
+    rows = []
     with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        for row in reader:
-            title = (row.get("Title") or "").strip()
-            if not title:
-                log("Skipping row without Title")
-                continue
-            body = (row.get("Body") or "").strip()
-            labels_csv = (row.get("Labels") or "").strip()
-            status = (row.get("Status") or "Todo").strip() or "Todo"
-            labels = [l.strip() for l in labels_csv.split(",") if l.strip()] if labels_csv else []
+        for r in reader:
+            rows.append({
+                "title": (r.get("Title") or "").strip(),
+                "body": (r.get("Body") or "").strip(),
+                "labels": [x.strip() for x in (r.get("Labels") or "").split(",") if x.strip()],
+                "status": (r.get("Status") or "Todo").strip() or "Todo",
+                "parent": (r.get("Parent") or "").strip(),
+            })
 
-            num, node = create_issue(token, repo_full, title, body, labels)
-            log(f"Issue created: #{num}")
-            item_id = add_issue_to_project(token, project_id, node)
-            set_status(token, project_id, item_id, field_id, status_options, status)
-            created += 1
+    title_to_issue = {}
+    parent_children = {}
 
-    log(f"Done. Created {created} issues, added to project, and set Status.")
+    for r in rows:
+        if not r["title"]:
+            continue
+        num, node = create_issue(token, repo_full, r["title"], r["body"], r["labels"])
+        item_id = add_issue_to_project(token, project_id, node)
+        set_status(token, project_id, item_id, field_id, status_opts, r["status"])
+        title_to_issue[r["title"]] = (num, node)
+        if r["parent"]:
+            parent_children.setdefault(r["parent"], []).append((num, r["title"]))
+
+    for parent_title, tasks in parent_children.items():
+        if parent_title not in title_to_issue:
+            die(f"Parent '{parent_title}' not found. Ensure parent row appears before its children.")
+        parent_num, _ = title_to_issue[parent_title]
+        append_tasklist(token, repo_full, parent_num, tasks)
+
+    print(f"Imported {len(rows)} issues and linked subtasks.")
 
 if __name__ == "__main__":
     main()
