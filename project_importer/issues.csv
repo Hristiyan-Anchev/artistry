@@ -1,0 +1,12 @@
+Title,Body,Labels,Status
+Bootstrap Django project,"Create Django project with apps: accounts, storefronts, catalog, orders, commissions, blog, pages, notifications.
+
+Acceptance:
+- Project runs locally with docker-compose.
+- .env support.
+- README with run instructions.","django,setup,backend,devops",Todo
+User registration & login (email/password),Enable registration/login/logout. Email verification required for creator storefront creation.,"auth,backend,frontend",Todo
+Creator storefront creation wizard,"Wizard to create storefront slug, name, avatar, banner, bio, links. Preview before publish.","storefront,frontend,backend",Todo
+Cart & checkout with Stripe,"Cart (session + authenticated), checkout, webhooks for payment success. Handle 3DS and order state updates.","checkout,payments,backend,frontend",Todo
+Commission request form builder,"Creator-defined constraints (size, medium, palette, budget, deadline); per-creator pricing rules.","commissions,backend,frontend",Todo
+Blog post CRUD with drafts & schedule,"Markdown editor, cover image, tags; scheduled publish.","blog,backend,frontend",Todo
