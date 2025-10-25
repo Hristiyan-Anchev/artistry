@@ -46,4 +46,4 @@ jobs:
           PROJECT_NUMBER: ${{ inputs.project_number }}
           REPO: ${{ inputs.repo_full }}
         run: |
-          python import_issues_to_project.py
+          python project_importer/import_issues_to_project.py
