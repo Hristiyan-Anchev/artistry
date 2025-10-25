@@ -35,7 +35,7 @@ jobs:
           pip install requests python-dotenv
       - name: Run importer
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
           CSV_PATH: ${{ github.workspace }}/${{ inputs.csv_path }}
           PROJECT_OWNER: ${{ inputs.project_owner }}
           PROJECT_NUMBER: ${{ inputs.project_number }}

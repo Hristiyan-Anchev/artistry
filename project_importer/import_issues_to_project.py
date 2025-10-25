@@ -115,14 +115,14 @@ def append_tasklist(token, repo_full, parent_number, tasks):
 
 def main():
     load_dotenv()
-    token = os.getenv("GITHUB_TOKEN")
+    token = os.getenv("GH_PAT")
     repo_full = os.getenv("REPO")
     project_owner = os.getenv("PROJECT_OWNER")
     project_number = int(os.getenv("PROJECT_NUMBER","0"))
     csv_path = os.getenv("CSV_PATH")
 
     if not token or not repo_full or not project_owner or not project_number or not csv_path:
-        die("Missing env vars: GITHUB_TOKEN, REPO, PROJECT_OWNER, PROJECT_NUMBER, CSV_PATH")
+        die("Missing env vars: GH_PAT, REPO, PROJECT_OWNER, PROJECT_NUMBER, CSV_PATH")
 
     project_id, project = find_project(token, project_owner, project_number)
     field_id, status_opts = get_status_field_info(project)

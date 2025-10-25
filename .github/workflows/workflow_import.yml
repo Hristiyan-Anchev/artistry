@@ -40,7 +40,7 @@ jobs:
         env:
           # Prefer the built-in token; if org policies block project updates,
           # create a PAT and use secrets.GH_PAT here instead.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
           CSV_PATH: ${{ github.workspace }}/${{ inputs.csv_path }}
           PROJECT_OWNER: ${{ inputs.project_owner }}
           PROJECT_NUMBER: ${{ inputs.project_number }}
