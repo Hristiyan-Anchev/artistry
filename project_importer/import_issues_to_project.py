@@ -31,31 +31,57 @@ def rest(token: str, method: str, path: str, json_body: Dict=None):
         die(f"REST {method} {path} -> HTTP {r.status_code}: {r.text}")
     return r
 
-def find_project(token: str, owner: str, number: int) -> Tuple[str, Dict]:
-    q = """
+def find_project(token: str, owner: str, number: int):
+    # First: try as a USER
+    q_user = """
     query($login:String!, $number:Int!) {
       user(login:$login) {
-        projectV2(number:$number) { id title fields(first:100) {
-          nodes {
-            ... on ProjectV2SingleSelectField { id name options { id name } }
-            ... on ProjectV2FieldCommon { id name }
-          }}
-        }
-      }
-      organization(login:$login) {
-        projectV2(number:$number) { id title fields(first:100) {
-          nodes {
-            ... on ProjectV2SingleSelectField { id name options { id name } }
-            ... on ProjectV2FieldCommon { id name }
-          }}
+        projectV2(number:$number) {
+          id
+          title
+          fields(first:100) {
+            nodes {
+              ... on ProjectV2SingleSelectField { id name options { id name } }
+              ... on ProjectV2FieldCommon { id name }
+            }
+          }
         }
       }
     }
     """
-    d = graphql(token, q, {"login": owner, "number": number})
-    proj = (d.get("user") or {}).get("projectV2") or (d.get("organization") or {}).get("projectV2")
-    if not proj: die(f"Project {number} not found for owner {owner}")
-    return proj["id"], proj
+    try:
+        d = graphql(token, q_user, {"login": owner, "number": number})
+        proj = (d.get("user") or {}).get("projectV2")
+        if proj:
+            return proj["id"], proj
+    except SystemExit:
+        # ignore and try org next
+        pass
+
+    # Then: try as an ORGANIZATION (only if needed)
+    q_org = """
+    query($login:String!, $number:Int!) {
+      organization(login:$login) {
+        projectV2(number:$number) {
+          id
+          title
+          fields(first:100) {
+            nodes {
+              ... on ProjectV2SingleSelectField { id name options { id name } }
+              ... on ProjectV2FieldCommon { id name }
+            }
+          }
+        }
+      }
+    }
+    """
+    d = graphql(token, q_org, {"login": owner, "number": number})
+    proj = (d.get("organization") or {}).get("projectV2")
+    if proj:
+        return proj["id"], proj
+
+    die(f"No ProjectV2 #{number} for user/org '{owner}'. Check the URL number and owner.")
+
 
 def get_status_field_info(project):
     for f in project["fields"]["nodes"]:
@@ -122,7 +148,7 @@ def main():
     csv_path = os.getenv("CSV_PATH")
 
     if not token or not repo_full or not project_owner or not project_number or not csv_path:
-        die("Missing env vars: GH_PAT, REPO, PROJECT_OWNER, PROJECT_NUMBER, CSV_PATH")
+        die("Missing env vars: GITHUB_TOKEN, REPO, PROJECT_OWNER, PROJECT_NUMBER, CSV_PATH")
 
     project_id, project = find_project(token, project_owner, project_number)
     field_id, status_opts = get_status_field_info(project)
