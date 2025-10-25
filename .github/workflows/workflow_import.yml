@@ -1,28 +1,9 @@
-name: Import backlog into GitHub Project
-on:
-  workflow_dispatch:
-    inputs:
-      csv_path:
-        description: 'Path to CSV in repo'
-        required: true
-        default: 'issues.csv'
-      project_owner:
-        description: 'User/Org login that owns the Project'
-        required: true
-      project_number:
-        description: 'Project number (from URL)'
-        required: true
-      repo_full:
-        description: 'Target repo (owner/name) to create issues in'
-        required: true
-
 jobs:
   import:
     runs-on: ubuntu-latest
     permissions:
       issues: write
       contents: read
-      projects: write
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
